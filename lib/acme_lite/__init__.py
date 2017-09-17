@@ -133,6 +133,9 @@ class ACMELite(object):
         return sign
 
     def request(self, payload):
+
+        self.logging("request payload:{0}".format(json.dumps(payload, indent=2)))
+
         resource       = payload["resource"]
         signed_payload = self.make_signed_payload(payload)
         signed_payload_json = json.dumps(signed_payload).encode("utf-8")
