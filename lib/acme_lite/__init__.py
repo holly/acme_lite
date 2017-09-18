@@ -8,7 +8,8 @@ from cryptography.x509.oid import NameOID
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from acme_lite.utils import b64,long2hex, long2b64, thumbprint, linkurl
-from acme_lite.agent import send_request, ACMEAuthz, ACMECert
+from acme_lite.agent import send_request
+from acme_lite.error import ACMEError
 import dns.resolver
 import json
 import copy
@@ -18,8 +19,6 @@ import signal
 
 __author__  = 'holly'
 __version__ = '1.0'
-
-DESCRIPTION = 'lets encrypt simple client tool'
 
 class ACMELite(object):
 
@@ -84,9 +83,11 @@ class ACMELite(object):
 
     def get_nonce_and_directory(self):
         url   = self.api_host + "/" + "directory"
-        r     = send_request(url)
-        nonce = r.headers['Replay-Nonce']
-        return nonce, r.json
+        res   = send_request(url)
+        if res.is_error():
+            raise ACMEError(res.error)
+        nonce = res.headers['Replay-Nonce']
+        return nonce, res.json
 
     def initial_account_key(self):
         key = rsa.generate_private_key(public_exponent=__class__.PUBLIC_EXPONENT, key_size=self.key_size, backend=default_backend())
@@ -201,12 +202,9 @@ class ACMELite(object):
         self.logging("body:{0}".format(res.text))
         return res
 
-    def notification(self, authz=None, challenge_type=None, skip_validate_real=False):
+    def notification(self, challenge=None):
 
-        if skip_validate_real is False:
-            authz.validate_real(challenge_type)
-
-        challenge = authz.challenge(challenge_type)
+        challenge_type = challenge["type"]
 
         payload = {
             "resource": "challenge",
@@ -215,12 +213,12 @@ class ACMELite(object):
         signed_payload = self.make_signed_payload(payload)
         signed_payload_json = json.dumps(signed_payload).encode("utf-8")
         res = send_request(challenge["uri"], resource="challenge", payload=signed_payload_json)
-        if res.code == 202:
-            if self.polling:
-                self.polling_challenge(challenge["uri"])
-            authz.refresh(challenge_type)
-
+        if res.is_error():
+            raise ACMEError(res.error)
+        if self.polling:
+            res = self.polling_challenge(challenge["uri"])
         return res
+
 
     def cert(self, csr):
         with open(csr, "r") as f:
@@ -266,12 +264,12 @@ class ACMELite(object):
         while True:
             res = send_request(challenge_uri)
             if res.code == 202 and res.json["status"] == "valid":
-                return True
+                return res
             else:
                 check_times += 1
 
             if check_times > self.polling_max_times:
-                raise RuntimeError("polling runtime error. over {0} times".format(self.polling_max_times))
+                raise ACMEError("polling runtime error. over {0} times".format(self.polling_max_times))
             else:
                 self.logging("challenge status still is not valid...{0} times".format(check_times))
                 time.sleep(self.polling_delay)

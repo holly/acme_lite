@@ -70,7 +70,7 @@ class ACMEResponse(object):
     def authz(self, thumbprint):
         if self.resource != "new-authz":
             return
-        return ACMEAuthz(domain=self.json["identifier"]["value"], status=self.json["status"], thumbprint=thumbprint, challenges=self.json["challenges"])
+        return ACMEAuthz(domain=self.json["identifier"]["value"], status=self.json["status"], expires=self.json["expires"], thumbprint=thumbprint, challenges=self.json["challenges"])
 
     def cert(self):
         if self.resource != "new-cert":
@@ -88,6 +88,7 @@ class ACMEAuthz(ACMEAgent):
         super().__init__()
         self.domain     = kwargs["domain"]
         self.status     = kwargs["status"]
+        self.expires    = kwargs["expires"]
         self.thumbprint = kwargs["thumbprint"]
         self.challenges = {}
 
