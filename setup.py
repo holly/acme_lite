@@ -17,17 +17,27 @@ def find_scripts(scripts_path):
 import os, sys
 
 libdir = "lib"
+#bindir = "bin"
+requires_list = 'requirements.txt'
 
-import info
-import version
-
-setup_options = info.INFO
-setup_options["version"] = version.VERSION
-setup_options.update(dict(
-  install_requires = open('requirements.txt').read().splitlines(),
+# package information.
+setup(
+  name         = "acme_lite",
+  description  = "acme lite client by python",
+  version      = "0.1",
+  author       = "Akira Horimoto",
+  author_email = "emperor.kurt@gmail.com",
+  license      = "MIT License",
+  url          = "https://github.com/holly/acme_lite",
+  classifiers  = [
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Utilities"
+  ],
+  install_requires = open(requires_list).read().splitlines(),
   #scripts          = find_scripts(bindir),
   packages         = find_packages(libdir),
   package_dir      = { "": libdir },
-))
+)
 
-setup(**setup_options)
