@@ -352,6 +352,8 @@ class ACMELite(object):
         if isinstance(flag, (bool)):
             self._staging = flag
             self.set_api_host()
+            _, directory = self.get_nonce_and_directory()
+            self._directory = directory
 
     @key_size.setter
     def key_size(self, key_size):
