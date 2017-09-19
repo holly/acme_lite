@@ -17,14 +17,14 @@ def find_scripts(scripts_path):
 import os, sys
 
 libdir = "lib"
-#bindir = "bin"
+bindir = "bin"
 requires_list = 'requirements.txt'
 
 # package information.
 setup(
   name         = "acme_lite",
   description  = "acme lite client by python",
-  version      = "0.2",
+  version      = "0.3",
   author       = "Akira Horimoto",
   author_email = "emperor.kurt@gmail.com",
   license      = "MIT License",
@@ -36,7 +36,7 @@ setup(
     "Topic :: Utilities"
   ],
   install_requires = open(requires_list).read().splitlines(),
-  #scripts          = find_scripts(bindir),
+  scripts          = find_scripts(bindir),
   packages         = find_packages(libdir),
   package_dir      = { "": libdir },
 )

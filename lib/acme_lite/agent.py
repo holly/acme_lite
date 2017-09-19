@@ -148,11 +148,18 @@ class ACMECert(ACMEAgent):
         super().__init__()
         self._intermediate_cert = None
         self._cert_url          = cert_url
+        self._cert_id           = None
         self._cert              = None
         self._x509_cert         = None
 
+        self.set_cert_id(cert_url)
         self.set_intermediate_cert(intermediate_cert_url)
         self.set_cert(cert)
+
+    def set_cert_id(self, cert_url=None):
+        if cert_url is None:
+            cert_url = self.cert_url
+        self._cert_id = cert_url.split("/")[-1]
 
     def set_intermediate_cert(self, intermediate_cert_url):
 
@@ -176,6 +183,10 @@ class ACMECert(ACMEAgent):
     @property
     def cert_url(self):
         return self._cert_url
+
+    @property
+    def cert_id(self):
+        return self._cert_id
 
     @property
     def cert(self):

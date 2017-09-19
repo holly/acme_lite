@@ -34,6 +34,7 @@ class ACMELite(object):
     REG_URL_FORMAT       = "/acme/reg/{0}"
     AUTHZ_URL_FORMAT     = "/acme/authz/{0}"
     CHALLENGE_URL_FORMAT = "/acme/challenge/{0}/{1}"
+    CERT_URL_FORMAT      = "/acme/cert/{0}"
 
     def __init__(self, **kwargs):
 
@@ -275,7 +276,7 @@ class ACMELite(object):
     def new_cert(self, csr):
         with open(csr, "r") as f:
             csr_data = f.read()
-            return self.cert_from_csr_data(csr_data)
+            return self.new_cert_from_csr_data(csr_data)
 
     def new_cert_from_csr_data(self, csr_data):
         req = x509.load_pem_x509_csr(csr_data.encode("utf-8"), default_backend())
@@ -287,7 +288,8 @@ class ACMELite(object):
         res = self.request(payload=payload)
         return res
 
-    def cert(self, cert_url):
+    def cert(self, cert_id):
+        cert_url = self.api_host + __class__.CERT_URL_FORMAT.format(cert_id)
         res = send_request(cert_url)
         if res.is_success():
             res.resource = "new-cert"
@@ -309,8 +311,6 @@ class ACMELite(object):
         }
         res = self.request(payload=payload)
         return res
-
-
 
     def validate_csr(self, csr):
         with open(csr, "r") as f:
