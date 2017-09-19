@@ -27,9 +27,13 @@ class ACMELite(object):
     PUBLIC_EXPONENT = 65537
 
     # polling
-    POLLING           = True
     POLLING_DELAY     = 1
     POLLING_MAX_TIMES = 10
+
+    # GET_
+    REG_URL_FORMAT       = "/acme/reg/{0}"
+    AUTHZ_URL_FORMAT     = "/acme/authz/{0}"
+    CHALLENGE_URL_FORMAT = "/acme/challenge/{0}/{1}"
 
     def __init__(self, **kwargs):
 
@@ -42,11 +46,6 @@ class ACMELite(object):
 
         # for genrsa
         self._key_size       = kwargs["key_size"] if "key_size" in kwargs else __class__.KEY_SIZE
-
-        # for polling
-        self._polling           = kwargs["polling"] if "polling" in kwargs else __class__.POLLING
-        self._polling_delay     = kwargs["polling_delay"] if "polling_delay" in kwargs else __class__.POLLING_DELAY
-        self._polling_max_times = kwargs["polling_max_times"] if "polling_max_times" in kwargs else __class__.POLLING_MAX_TIMES
 
         if "account_key" in kwargs:
             self.set_account_key(kwargs["account_key"])
@@ -185,26 +184,78 @@ class ACMELite(object):
             self.account_key = new_account_key
         return res
 
-
-    def authz(self, domain):
+    def new_authz(self, domain):
         payload = {
                "resource": "new-authz",
                "identifier": {"type": "dns", "value": domain },
             }
         res = self.request(payload=payload)
+        self.logging("code:{0}".format(res.code))
+        self.logging("body:{0}".format(res.text))
         return res
 
-    def fetch_authz(self, fetch_authz_url):
-        res = send_request(fetch_authz_url)
+    def authz(self, authz_token):
+        authz_url = self.api_host + __class__.AUTHZ_URL_FORMAT.format(authz_token)
+        res = send_request(authz_url)
         if res.is_success():
             res.resource = "new-authz"
         self.logging("code:{0}".format(res.code))
         self.logging("body:{0}".format(res.text))
         return res
 
-    def notification(self, challenge=None):
+    def validate_real_challenge(self, challenge):
 
-        challenge_type = challenge["type"]
+        challenge_type   = challenge["type"]
+        setting_location = challenge["setting_location"]
+        auth_key         = challenge["auth_key"]
+
+        if challenge["status"] == "valid":
+            return True
+        if challenge["status"] != "pending":
+            raise ACMEError("{0} status is not pending".format(challenge_type))
+
+        if challenge_type == "http-01" or challenge_type == "tls-sni-01":
+            res = send_request(setting_location)
+            real_auth_key = res.text
+            if res.code != 200:
+                raise ACMEError("setting_location:{0} is unreachable".format(setting_location))
+            if auth_key != real_auth_key:
+                raise ACMEError("auth.key({0}) and remote.key({1}) are mismatch".format(auth_key, real_key))
+            return True
+
+        elif challenge_type == "dns-01":
+            txt = dns.resolver.query(setting_location, 'TXT')
+            for i in txt.response.answer:
+                for item in i.items:
+                    if item.to_text() == auth_key:
+                        return True
+
+                raise ACMEError("txt records({0}) are mismatch".format(setting_location))
+
+    def handle_challenge(self, challenge, polling_max_times=POLLING_MAX_TIMES):
+
+        res = self.new_challenge(challenge)
+        if res.is_error():
+            raise ACMEError(res.error)
+
+        times = 0
+        while True:
+            res = self.challenge(challenge)
+            if res.is_error():
+                raise ACMEError(res.error)
+            if res.code == 202 and res.json["status"] == "valid":
+                return res
+            else:
+                times += 1
+
+            if times > polling_max_times:
+                raise ACMEError("polling runtime error. over {0} times".format(times))
+            else:
+                self.logging("challenge status still is not valid...{0} times".format(times))
+                time.sleep(__class__.POLLING_DELAY)
+
+
+    def new_challenge(self, challenge):
 
         payload = {
             "resource": "challenge",
@@ -212,20 +263,21 @@ class ACMELite(object):
         }
         signed_payload = self.make_signed_payload(payload)
         signed_payload_json = json.dumps(signed_payload).encode("utf-8")
-        res = send_request(challenge["uri"], resource="challenge", payload=signed_payload_json)
-        if res.is_error():
-            raise ACMEError(res.error)
-        if self.polling:
-            res = self.polling_challenge(challenge["uri"])
+        return send_request(challenge["uri"], resource="challenge", payload=signed_payload_json)
+
+    def challenge(self, challenge):
+        res = send_request(challenge["uri"])
+        if res.is_success():
+            res.resource = "challenge"
         return res
 
 
-    def cert(self, csr):
+    def new_cert(self, csr):
         with open(csr, "r") as f:
             csr_data = f.read()
             return self.cert_from_csr_data(csr_data)
 
-    def cert_from_csr_data(self, csr_data):
+    def new_cert_from_csr_data(self, csr_data):
         req = x509.load_pem_x509_csr(csr_data.encode("utf-8"), default_backend())
         csr_der = req.public_bytes(serialization.Encoding.DER)
         payload = {
@@ -235,8 +287,8 @@ class ACMELite(object):
         res = self.request(payload=payload)
         return res
 
-    def fetch_cert(self, fetch_cert_url):
-        res = send_request(fetch_cert_url)
+    def cert(self, cert_url):
+        res = send_request(cert_url)
         if res.is_success():
             res.resource = "new-cert"
         self.logging("code:{0}".format(res.code))
@@ -259,20 +311,6 @@ class ACMELite(object):
         return res
 
 
-    def polling_challenge(self, challenge_uri):
-        check_times = 0
-        while True:
-            res = send_request(challenge_uri)
-            if res.code == 202 and res.json["status"] == "valid":
-                return res
-            else:
-                check_times += 1
-
-            if check_times > self.polling_max_times:
-                raise ACMEError("polling runtime error. over {0} times".format(self.polling_max_times))
-            else:
-                self.logging("challenge status still is not valid...{0} times".format(check_times))
-                time.sleep(self.polling_delay)
 
     def validate_csr(self, csr):
         with open(csr, "r") as f:

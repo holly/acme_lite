@@ -9,10 +9,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 import json
-import dns.resolver
 import sys
-
-
 
 class ACMEAgent(object):
 
@@ -39,6 +36,7 @@ class ACMEResponse(object):
 
     def __init__(self, resource, res):
         self.resource = resource
+        self.url      = res.geturl()
         self.code     = res.getcode()
         self.body     = res.read()
         self.headers  = res.info()
@@ -70,14 +68,16 @@ class ACMEResponse(object):
     def authz(self, thumbprint):
         if self.resource != "new-authz":
             return
-        return ACMEAuthz(domain=self.json["identifier"]["value"], status=self.json["status"], expires=self.json["expires"], thumbprint=thumbprint, challenges=self.json["challenges"])
+        authz_url = self.headers["Location"] if "Location" in self.headers else self.url
+        return ACMEAuthz(domain=self.json["identifier"]["value"], status=self.json["status"], expires=self.json["expires"], thumbprint=thumbprint, authz_url=authz_url, challenges=self.json["challenges"])
 
     def cert(self):
         if self.resource != "new-cert":
             return
+        cert_url = self.headers["Location"] if "Location" in self.headers else self.url
         # Link: <https://acme-staging.api.letsencrypt.org/acme/issuer-cert>;rel="up"
         intermediate_cert_url = linkurl(self.headers["Link"])
-        return ACMECert(cert=self.body, intermediate_cert_url=intermediate_cert_url)
+        return ACMECert(cert=self.body, intermediate_cert_url=intermediate_cert_url, cert_url=cert_url)
 
 class ACMEAuthz(ACMEAgent):
 
@@ -86,13 +86,22 @@ class ACMEAuthz(ACMEAgent):
 
     def __init__(self, **kwargs):
         super().__init__()
-        self.domain     = kwargs["domain"]
-        self.status     = kwargs["status"]
-        self.expires    = kwargs["expires"]
-        self.thumbprint = kwargs["thumbprint"]
-        self.challenges = {}
+        self.domain      = kwargs["domain"]
+        self.status      = kwargs["status"]
+        self.expires     = kwargs["expires"]
+        self.thumbprint  = kwargs["thumbprint"]
+        self.authz_url   = kwargs["authz_url"]
+        self.authz_token = None
+        self.challenges  = {}
 
+        if kwargs["authz_url"]:
+            self.set_authz_token(kwargs["authz_url"])
         self.extract_challenges(kwargs["challenges"])
+
+    def set_authz_token(self, authz_url=None):
+        if authz_url is None:
+            authz_url = self.authz_url
+        self.authz_token = authz_url.split("/")[-1]
 
     def challenge(self, challenge_type):
         if challenge_type in self.challenges:
@@ -124,33 +133,9 @@ class ACMEAuthz(ACMEAgent):
                 self.challenges[challenge_type]["setting_location"] = __class__.ACME_TXT_RECORD.format(self.domain)
                 self.challenges[challenge_type]["auth_key"] = self.challenges[challenge_type]["token"]
 
-    def validate_real(self, challenge_type):
-
-        challenge        = self.challenge(challenge_type)
-        setting_location = challenge["setting_location"]
-        auth_key         = challenge["auth_key"]
-
-        if challenge["status"] == "valid":
-            return True
-        if challenge["status"] != "pending":
-            raise ACMEError("{0} status is not pending".format(challenge_type))
-
-        if challenge_type == "http-01" or challenge_type == "tls-sni-01":
-            res = ACMEResponse(None, self.request(setting_location))
-            if res.code != 200:
-                raise ACMEError("setting_location:{0} is unreachable".format(setting_location))
-            if res.text.strip() != auth_key:
-                raise ACMEError("auth.key({0}) and remote.key({1}) are mismatch".format(auth_key, res.text.strip()))
-            return True
-
-        elif challenge_type == "dns-01":
-            txt = dns.resolver.query(setting_location, 'TXT')
-            for i in txt.response.answer:
-                for item in i.items:
-                    if item.to_text() == auth_key:
-                        return True
-
-                raise ACMEError("txt records({0}) are mismatch".format(setting_location))
+            splited = challenge["uri"].split("/")
+            self.challenges[challenge_type]["authz_token"] = splited[-2]
+            self.challenges[challenge_type]["challenge_id"] = splited[-1]
 
 
 class ACMECert(ACMEAgent):
@@ -159,9 +144,10 @@ class ACMECert(ACMEAgent):
     STAGING_INTERMEDIATE_CERT_URL    = "https://letsencrypt.org/certs/fakeleintermediatex1.pem"
     PRODUCTION_INTERMEDIATE_CERT_URL = "https://letsencrypt.org/certs/letsencryptauthorityx3.pem.txt"
 
-    def __init__(self, cert=None, intermediate_cert_url=None):
+    def __init__(self, cert=None, intermediate_cert_url=None, cert_url=None):
         super().__init__()
         self._intermediate_cert = None
+        self._cert_url          = cert_url
         self._cert              = None
         self._x509_cert         = None
 
@@ -186,6 +172,10 @@ class ACMECert(ACMEAgent):
     @property
     def intermediate_cert(self):
         return self._intermediate_cert
+
+    @property
+    def cert_url(self):
+        return self._cert_url
 
     @property
     def cert(self):
