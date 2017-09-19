@@ -13,7 +13,7 @@ import os, sys, io
 import json
 
 __author__  = 'Akira Horimoto'
-__version__ = '1.0'
+__version__ = '0.3.1'
 
 DESCRIPTION     = 'acme_lite commandline interface'
 CHALLENGE_TYPES = ["http-01", "dns-01", "tls-sni-01"]
@@ -28,16 +28,19 @@ subparsers = parser.add_subparsers(help='sub-command help', dest='subparser_name
 new_reg_parser = subparsers.add_parser('new_reg', description='register LE account', help='new_reg help')
 new_reg_parser.add_argument('--account-key', type=FileType("r"), required=True, help='load rsa private key')
 new_reg_parser.add_argument('--no-staging', action='store_true', help='use letsencrypt production api')
+new_reg_parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
 
 new_authz_parser = subparsers.add_parser('new_authz', description='new authz', help='new_authz help')
 new_authz_parser.add_argument('--account-key', type=FileType("r"), required=True, help='load rsa private key')
 new_authz_parser.add_argument('--no-staging', action='store_true', help='use letsencrypt production api')
 new_authz_parser.add_argument('--domain', "-d", action='store', required=True, help='challenge domain')
+new_authz_parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
 
 authz_parser = subparsers.add_parser('authz', description='authz', help='authz help')
 authz_parser.add_argument('--account-key', type=FileType("r"), required=True, help='load rsa private key')
 authz_parser.add_argument('--no-staging', action='store_true', help='use letsencrypt production api')
 authz_parser.add_argument('--authz-token', action='store', required=True, help='authz token for check status')
+authz_parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
 
 new_challenge_parser = subparsers.add_parser('new_challenge', description='new_challenge', help='new_challenge help')
 new_challenge_parser.add_argument('--account-key', type=FileType("r"), required=True, help='load rsa private key')
@@ -45,17 +48,20 @@ new_challenge_parser.add_argument('--no-staging', action='store_true', help='use
 new_challenge_parser.add_argument('--authz-token', action='store', required=True, help='new_challenge token for check status')
 new_challenge_parser.add_argument('--challenge-type', '-t', choices=CHALLENGE_TYPES, default=CHALLENGE_TYPES[0], help='challenge type(default: {0}'.format(CHALLENGE_TYPES[0]))
 new_challenge_parser.add_argument('--skip-validate-real-challenge', action='store_true', help='skip real valiation check before acme challenge')
+new_challenge_parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
 
 challenge_parser = subparsers.add_parser('challenge', description='challenge', help='challenge help')
 challenge_parser.add_argument('--account-key', type=FileType("r"), required=True, help='load rsa private key')
 challenge_parser.add_argument('--no-staging', action='store_true', help='use letsencrypt production api')
 challenge_parser.add_argument('--authz-token', action='store', required=True, help='new_challenge token for check status')
 challenge_parser.add_argument('--challenge-type', '-t', choices=CHALLENGE_TYPES, default=CHALLENGE_TYPES[0], help='challenge type(default: {0}'.format(CHALLENGE_TYPES[0]))
+challenge_parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
 
 new_cert_parser = subparsers.add_parser('new_cert', description='new_cert', help='new_cert help')
 new_cert_parser.add_argument('--account-key', type=FileType("r"), required=True, help='load rsa account key')
 new_cert_parser.add_argument('--no-staging', action='store_true', help='use letsencrypt production api')
 new_cert_parser.add_argument('--csr', type=FileType("r"), required=True, help='load certificate sign request file')
+new_cert_parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
 
 cert_parser = subparsers.add_parser('cert', description='cert', help='cert help')
 cert_parser.add_argument('--account-key', type=FileType("r"), required=True, help='load rsa account key')
@@ -63,11 +69,13 @@ cert_parser.add_argument('--no-staging', action='store_true', help='use letsencr
 cert_parser.add_argument('--cert-id', action='store', required=True, help='cert url')
 cert_parser.add_argument('--cert-type', '-t', choices=CERT_TYPES, default=CERT_TYPES[0], help='cert type(default: {0}'.format(CERT_TYPES[0]))
 cert_parser.add_argument('--cert', type=FileType("w"), default=sys.stdout, help='write certificate file')
+cert_parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
 
 revoke_parser = subparsers.add_parser('revoke', description='revoke', help='revoke help')
 revoke_parser.add_argument('--account-key', type=FileType("r"), required=True, help='load rsa account key')
 revoke_parser.add_argument('--no-staging', action='store_true', help='use letsencrypt production api')
 revoke_parser.add_argument('--cert', type=FileType("r"), required=True, help='load certificate file')
+revoke_parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
 
 args = parser.parse_args()
 acme = ACMELite()
@@ -84,6 +92,7 @@ def main():
     exit_code = 0
     if args.no_staging:
         acme.staging = False
+    acme.verbose = args.verbose
     key_data = args.account_key.read()
     acme.set_account_key_from_key_data(key_data)
     acme.set_header_and_thumbprint()
@@ -175,6 +184,7 @@ def main():
                 print(cert.cert, file=args.cert)
             elif args.cert_type == "full-chain":
                 print(cert.full_chain_cert, file=args.cert)
+
         elif args.subparser_name == 'revoke':
             res = acme.revoke_from_cert_data(args.cert.read())
             if res.is_error():

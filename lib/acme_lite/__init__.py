@@ -39,7 +39,7 @@ class ACMELite(object):
     def __init__(self, **kwargs):
 
         self._staging     = kwargs["staging"] if "staging" in kwargs else True
-        self._debug       = kwargs["debug"] if "debug" in kwargs else False
+        self._verbose      = kwargs["verbose"] if "verbose" in kwargs else False
         self._account_key = None
         self._header      = None
         self._thumbprint  = None
@@ -135,15 +135,30 @@ class ACMELite(object):
 
     def request(self, payload):
 
-        self.logging("request payload:{0}".format(json.dumps(payload, indent=2)))
 
         resource       = payload["resource"]
         signed_payload = self.make_signed_payload(payload)
         signed_payload_json = json.dumps(signed_payload).encode("utf-8")
-        res = send_request(self.directory[resource], resource=resource, payload=signed_payload_json)
 
-        self.logging("code:{0}".format(res.code))
-        self.logging("body:{0}".format(res.text))
+        self.logging("===================================")
+        self.logging("payload: {0}".format(json.dumps(payload, indent=2)))
+        self.logging("signed_payload: {0}".format(json.dumps(signed_payload, indent=2)))
+        self.logging("===================================")
+
+        return self.single_request(self.directory[resource], resource=resource, payload=signed_payload_json)
+
+    def single_request(self, url, resource=None, payload=None):
+
+        res = send_request(url, resource=resource, payload=payload)
+
+        self.logging("===================================")
+        self.logging("url: {0}".format(res.url))
+        self.logging("code: {0}".format(res.code))
+        self.logging("")
+        self.logging(res.headers)
+        self.logging("")
+        self.logging(res.text)
+        self.logging("===================================")
 
         return res
 
@@ -197,11 +212,9 @@ class ACMELite(object):
 
     def authz(self, authz_token):
         authz_url = self.api_host + __class__.AUTHZ_URL_FORMAT.format(authz_token)
-        res = send_request(authz_url)
+        res = self.single_request(authz_url)
         if res.is_success():
             res.resource = "new-authz"
-        self.logging("code:{0}".format(res.code))
-        self.logging("body:{0}".format(res.text))
         return res
 
     def validate_real_challenge(self, challenge):
@@ -216,7 +229,7 @@ class ACMELite(object):
             raise ACMEError("{0} status is not pending".format(challenge_type))
 
         if challenge_type == "http-01" or challenge_type == "tls-sni-01":
-            res = send_request(setting_location)
+            res = self.single_request(setting_location)
             real_auth_key = res.text
             if res.code != 200:
                 raise ACMEError("setting_location:{0} is unreachable".format(setting_location))
@@ -264,10 +277,10 @@ class ACMELite(object):
         }
         signed_payload = self.make_signed_payload(payload)
         signed_payload_json = json.dumps(signed_payload).encode("utf-8")
-        return send_request(challenge["uri"], resource="challenge", payload=signed_payload_json)
+        return self.single_request(challenge["uri"], resource="challenge", payload=signed_payload_json)
 
     def challenge(self, challenge):
-        res = send_request(challenge["uri"])
+        res = self.single_request(challenge["uri"])
         if res.is_success():
             res.resource = "challenge"
         return res
@@ -290,7 +303,7 @@ class ACMELite(object):
 
     def cert(self, cert_id):
         cert_url = self.api_host + __class__.CERT_URL_FORMAT.format(cert_id)
-        res = send_request(cert_url)
+        res = self.single_request(cert_url)
         if res.is_success():
             res.resource = "new-cert"
         self.logging("code:{0}".format(res.code))
@@ -320,7 +333,7 @@ class ACMELite(object):
         return x509.load_pem_x509_csr(csr_data.encode("utf-8"), default_backend())
 
     def logging(self, message):
-        if self.debug is False:
+        if self.verbose is False:
             return
         print(message, file=sys.stderr)
 
@@ -334,8 +347,8 @@ class ACMELite(object):
         return self._api_host
 
     @property
-    def debug(self):
-        return self._debug
+    def verbose(self):
+        return self._verbose
 
     @property
     def directory(self):
@@ -357,17 +370,6 @@ class ACMELite(object):
     def key_size(self):
         return self._key_size
 
-    @property
-    def polling(self):
-        return self._polling
-
-    @property
-    def polling_delay(self):
-        return self._polling_delay
-
-    @property
-    def polling_max_times(self):
-        return self._polling_max_times
 
     @api_host.setter
     def api_host(self, api_host):
@@ -379,9 +381,9 @@ class ACMELite(object):
             self._account_key = account_key
             self.set_header_and_thumbprint()
 
-    @debug.setter
-    def debug(self, debug):
-        self._debug = debug
+    @verbose.setter
+    def verbose(self, verbose):
+        self._verbose = verbose
 
     @staging.setter
     def staging(self, flag):
@@ -394,19 +396,6 @@ class ACMELite(object):
     @key_size.setter
     def key_size(self, key_size):
         self._key_size = key_size
-
-    @polling.setter
-    def polling(self, polling):
-        self._polling = polling
-
-    @polling_delay.setter
-    def polling_delay(self, polling_delay):
-        self._polling_delay = polling_delay
-
-    @polling_max_times.setter
-    def polling_max_times(self, polling_max_times):
-        self._polling_max_times = polling_max_times
-
 
 if __name__ == "__main__":
     pass

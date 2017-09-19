@@ -24,7 +24,7 @@ requires_list = 'requirements.txt'
 setup(
   name         = "acme_lite",
   description  = "acme lite client by python",
-  version      = "0.3",
+  version      = "0.3.1",
   author       = "Akira Horimoto",
   author_email = "emperor.kurt@gmail.com",
   license      = "MIT License",
