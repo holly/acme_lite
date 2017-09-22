@@ -172,7 +172,13 @@ def main():
                 raise ACMEError(res.error)
             cert     = res.cert()
             cert_url = res.headers["Location"]
-            data = { "cert_url": cert_url, "cert_id": cert.cert_id }
+            data = {
+                    "cert_url": cert_url,
+                    "cert_id": cert.cert_id,
+                    "cert": cert.cert,
+                    "intermediate_cert": cert.intermediate_cert,
+                    "cert_expiration_date": cert.x509_cert.not_valid_after.strftime("%Y-%m-%d %H:%M:%S"),
+                }
             print(dict2json(data))
 
         elif args.subparser_name == 'cert':
@@ -180,6 +186,7 @@ def main():
             if res.is_error():
                 raise ACMEError(res.error)
             cert     = res.cert()
+            cert_url = cert.cert_url
             if args.cert_type == "cert":
                 print(cert.cert, file=args.cert)
             elif args.cert_type == "full-chain":
