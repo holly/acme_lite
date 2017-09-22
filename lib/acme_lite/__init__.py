@@ -9,7 +9,7 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from acme_lite.utils import b64,long2hex, long2b64, thumbprint, linkurl
 from acme_lite.agent import send_request
-from acme_lite.error import ACMEError
+from acme_lite.error import ACMEError, ACMEGetNonceError, ACMEPollingTimeOutError
 import dns.resolver
 import json
 import copy
@@ -86,6 +86,8 @@ class ACMELite(object):
         res   = send_request(url)
         if res.is_error():
             raise ACMEError(res.error)
+        if 'Replay-Nonce' not in res.headers:
+            raise ACMEGetNonceError("nonce field is not exists in response headers")
         nonce = res.headers['Replay-Nonce']
         return nonce, res.json
 
@@ -135,14 +137,13 @@ class ACMELite(object):
 
     def request(self, payload):
 
-
         resource       = payload["resource"]
         signed_payload = self.make_signed_payload(payload)
         signed_payload_json = json.dumps(signed_payload).encode("utf-8")
 
+        self.logging("debug request payload")
         self.logging("===================================")
         self.logging("payload: {0}".format(json.dumps(payload, indent=2)))
-        self.logging("signed_payload: {0}".format(json.dumps(signed_payload, indent=2)))
         self.logging("===================================")
 
         return self.single_request(self.directory[resource], resource=resource, payload=signed_payload_json)
@@ -151,6 +152,7 @@ class ACMELite(object):
 
         res = send_request(url, resource=resource, payload=payload)
 
+        self.logging("debug response contents")
         self.logging("===================================")
         self.logging("url: {0}".format(res.url))
         self.logging("code: {0}".format(res.code))

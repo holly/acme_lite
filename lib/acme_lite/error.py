@@ -3,3 +3,9 @@
 
 class ACMEError(Exception):
     pass
+
+class ACMEGetNonceError(ACMEError):
+    pass
+
+class ACMEPollingTimeOutError(ACMEError):
+    pass
