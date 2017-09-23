@@ -13,7 +13,7 @@ import os, sys, io
 import json
 
 __author__  = 'Akira Horimoto'
-__version__ = '0.3.3'
+__version__ = '0.3.4'
 
 DESCRIPTION     = 'acme_lite commandline interface'
 CHALLENGE_TYPES = ["http-01", "dns-01", "tls-sni-01"]
@@ -62,6 +62,7 @@ new_cert_parser.add_argument('--no-staging', action='store_true', help='use lets
 new_cert_parser.add_argument('--csr', type=FileType("r"), required=True, help='load certificate sign request file')
 new_cert_parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
 new_cert_parser.add_argument('--print-only-cert', '-p', action='store_true', help='print only cert mode')
+new_cert_parser.add_argument('--print-only-full-chain-cert', '-P', action='store_true', help='print only cert and intermediate cert mode')
 
 cert_parser = subparsers.add_parser('cert', description='cert', help='cert help')
 cert_parser.add_argument('--account-key', type=FileType("r"), required=True, help='load rsa account key')
@@ -69,6 +70,7 @@ cert_parser.add_argument('--no-staging', action='store_true', help='use letsencr
 cert_parser.add_argument('--cert-id', action='store', required=True, help='cert url')
 cert_parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
 cert_parser.add_argument('--print-only-cert', '-p', action='store_true', help='print only cert mode')
+cert_parser.add_argument('--print-only-full-chain-cert', '-P', action='store_true', help='print only cert and intermediate cert mode')
 
 revoke_parser = subparsers.add_parser('revoke', description='revoke', help='revoke help')
 revoke_parser.add_argument('--account-key', type=FileType("r"), required=True, help='load rsa account key')
@@ -173,6 +175,8 @@ def main():
             cert     = res.cert()
             if args.print_only_cert:
                 data = cert.cert
+            elif args.print_only_full_chain_cert:
+                data = "\n".join([cert.cert, cert.intermediate_cert])
             else:
                 cert_url = res.headers["Location"]
                 data = dict2json({
@@ -192,6 +196,8 @@ def main():
             cert     = res.cert()
             if args.print_only_cert:
                 data = cert.cert
+            elif args.print_only_full_chain_cert:
+                data = "\n".join([cert.cert, cert.intermediate_cert])
             else:
                 cert_url = cert.cert_url
                 data = dict2json({
