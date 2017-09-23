@@ -16,7 +16,7 @@ def find_scripts(scripts_path):
 
 import os, sys
 
-version       = '0.3.4'
+version       = '0.3.5'
 libdir        = "lib"
 bindir        = "bin"
 requires_list = 'requirements.txt'

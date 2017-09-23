@@ -6,6 +6,8 @@ acme lite client by python
 # usage
 
 ```
+#!/usr/bin/env python
+
 from acme_lite import ACMELite
 from acme_lite.error import ACMEError
 
@@ -15,7 +17,7 @@ res = acme.register()
 if res.is_error():
     raise ACMEError(res.error)
 
-res = acme.authz("www.example.com")
+res = acme.new_authz("www.example.com")
 if res.is_error():
     raise ACMEError(res.error)
 authz = res.authz(acme.thumbprint)
@@ -25,19 +27,24 @@ acme_challenge = "/path/to/www.example.com/.well-known/acme-challenge/" + http_c
 with open(acme_challenge, "w") as f:
     f.write(http_challenge["auth_key"])
 
-authz.validate_real("http-01")
-res = acme.notification(authz, "http-01")
+acme.validate_real_challenge(http_challenge)
+res = acme.handle_challenge(http_challenge)
 if res.is_error():
     raise ACMEError(res.error)
 
-res = acme.cert("server.csr")
+res = acme.new_cert("server.csr")
 if res.is_error():
     raise ACMEError(res.error)
 cert = res.cert()
 
-cert_file              = cert.cert
-intermediate_cert_file = cert.intermediate_cert
-full_chain_cert_file   = cert.full_chain_cert
+cert_data              = cert.cert
+intermediate_cert_data = cert.intermediate_cert
+full_chain_cert_data   = cert.full_chain_cert
+
+
+with open("/path/to/www.example.com/server.crt", "w") as f:
+    print(full_chain_cert_data, file=f)
+
 ```
 
 # install

@@ -13,7 +13,7 @@ import os, sys, io
 import json
 
 __author__  = 'Akira Horimoto'
-__version__ = '0.3.4'
+__version__ = '0.3.5'
 
 DESCRIPTION     = 'acme_lite commandline interface'
 CHALLENGE_TYPES = ["http-01", "dns-01", "tls-sni-01"]
@@ -176,7 +176,7 @@ def main():
             if args.print_only_cert:
                 data = cert.cert
             elif args.print_only_full_chain_cert:
-                data = "\n".join([cert.cert, cert.intermediate_cert])
+                data = cert.full_chain_cert
             else:
                 cert_url = res.headers["Location"]
                 data = dict2json({
@@ -197,7 +197,7 @@ def main():
             if args.print_only_cert:
                 data = cert.cert
             elif args.print_only_full_chain_cert:
-                data = "\n".join([cert.cert, cert.intermediate_cert])
+                data = cert.full_chain_cert
             else:
                 cert_url = cert.cert_url
                 data = dict2json({
