@@ -13,11 +13,10 @@ import os, sys, io
 import json
 
 __author__  = 'Akira Horimoto'
-__version__ = '0.3.1'
+__version__ = '0.3.3'
 
 DESCRIPTION     = 'acme_lite commandline interface'
 CHALLENGE_TYPES = ["http-01", "dns-01", "tls-sni-01"]
-CERT_TYPES      = ["cert", "full-chain"]
 
 
 parser = ArgumentParser(description=DESCRIPTION)
@@ -62,14 +61,14 @@ new_cert_parser.add_argument('--account-key', type=FileType("r"), required=True,
 new_cert_parser.add_argument('--no-staging', action='store_true', help='use letsencrypt production api')
 new_cert_parser.add_argument('--csr', type=FileType("r"), required=True, help='load certificate sign request file')
 new_cert_parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
+new_cert_parser.add_argument('--print-only-cert', '-p', action='store_true', help='print only cert mode')
 
 cert_parser = subparsers.add_parser('cert', description='cert', help='cert help')
 cert_parser.add_argument('--account-key', type=FileType("r"), required=True, help='load rsa account key')
 cert_parser.add_argument('--no-staging', action='store_true', help='use letsencrypt production api')
 cert_parser.add_argument('--cert-id', action='store', required=True, help='cert url')
-cert_parser.add_argument('--cert-type', '-t', choices=CERT_TYPES, default=CERT_TYPES[0], help='cert type(default: {0}'.format(CERT_TYPES[0]))
-cert_parser.add_argument('--cert', type=FileType("w"), default=sys.stdout, help='write certificate file')
 cert_parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
+cert_parser.add_argument('--print-only-cert', '-p', action='store_true', help='print only cert mode')
 
 revoke_parser = subparsers.add_parser('revoke', description='revoke', help='revoke help')
 revoke_parser.add_argument('--account-key', type=FileType("r"), required=True, help='load rsa account key')
@@ -167,30 +166,42 @@ def main():
             print(dict2json(res.json))
 
         elif args.subparser_name == 'new_cert':
+            data = None
             res = acme.new_cert_from_csr_data(args.csr.read())
             if res.is_error():
                 raise ACMEError(res.error)
             cert     = res.cert()
-            cert_url = res.headers["Location"]
-            data = {
+            if args.print_only_cert:
+                data = cert.cert
+            else:
+                cert_url = res.headers["Location"]
+                data = dict2json({
                     "cert_url": cert_url,
                     "cert_id": cert.cert_id,
                     "cert": cert.cert,
                     "intermediate_cert": cert.intermediate_cert,
                     "cert_expiration_date": cert.x509_cert.not_valid_after.strftime("%Y-%m-%d %H:%M:%S"),
-                }
-            print(dict2json(data))
+                })
+            print(data)
 
         elif args.subparser_name == 'cert':
+            data = None
             res = acme.cert(args.cert_id)
             if res.is_error():
                 raise ACMEError(res.error)
             cert     = res.cert()
-            cert_url = cert.cert_url
-            if args.cert_type == "cert":
-                print(cert.cert, file=args.cert)
-            elif args.cert_type == "full-chain":
-                print(cert.full_chain_cert, file=args.cert)
+            if args.print_only_cert:
+                data = cert.cert
+            else:
+                cert_url = cert.cert_url
+                data = dict2json({
+                    "cert_url": cert_url,
+                    "cert_id": cert.cert_id,
+                    "cert": cert.cert,
+                    "intermediate_cert": cert.intermediate_cert,
+                    "cert_expiration_date": cert.x509_cert.not_valid_after.strftime("%Y-%m-%d %H:%M:%S"),
+                })
+            print(data)
 
         elif args.subparser_name == 'revoke':
             res = acme.revoke_from_cert_data(args.cert.read())
